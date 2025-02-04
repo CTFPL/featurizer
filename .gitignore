@@ -1,0 +1,5 @@
+.env
+data/
+logs/
+notebooks/
+__pycache__/
