@@ -10,7 +10,7 @@ from tinkoff.invest.schemas import InstrumentExchangeType, Currency
 from tinkoff.invest.constants import INVEST_GRPC_API_SANDBOX
 from tqdm import tqdm
 
-from src.data.fetch import fetch_candles_data
+from src.data.fetch import fetch_candles_data, fetch_candles_data_last
 
 
 def get_available_tickers(token: str) -> pl.DataFrame:
@@ -64,7 +64,7 @@ def fetch_all(n_days, interval, save_dir, error_ticker_dir):
     print(f"Number of available tickers: ", len(available_tickers))
     for t in tqdm(available_tickers.to_dicts()):
         try:
-            fetch_candles_data(
+            fetch_candles_data_last(
                 instrument_id=t["uid"], 
                 token=token, 
                 n_days=n_days, 
@@ -77,8 +77,28 @@ def fetch_all(n_days, interval, save_dir, error_ticker_dir):
 
 
 @cli.command()
-def reconcile():
-    pass
+@click.option("-i", "--interval", default="CANDLE_INTERVAL_HOUR", help="Аналогичное название из либы")
+@click.option("-s", "--save-dir", type=click.Path(file_okay=False, exists=True), default="./data/candles/")
+@click.option("-f", "--date-from", type=click.DateTime(formats=["%Y-%m-%d %H:%M:%S%z", "%Y-%m-%d %H:%M:%S"]))
+@click.option("-e", "--date-to", type=click.DateTime(formats=["%Y-%m-%d %H:%M:%S%z", "%Y-%m-%d %H:%M:%S"]))
+@click.option("-t", "--tickers", type=click.STRING)
+def fetch_tickers_from_list(interval, save_dir, date_from, date_to, tickers):
+    token = os.environ["SANDBOX_TOKEN"]
+    save_dir = Path(save_dir)
+
+    tickers = tickers.split(",")
+    # date_from = datetime.fromisoformat(date_from)
+    # date_to = datetime.fromisoformat(date_to)
+
+    assert validate_candle_interval_input(interval)
+    for t in tqdm(tickers):
+        fetch_candles_data(
+            instrument_id=t, 
+            token=token, 
+            date_from=date_from,
+            date_to=date_to,
+            interval=CandleInterval[interval]
+        ).write_parquet(save_dir / f"{t['ticker']}.parquet")  # type:ignore
 
 
 if __name__ == "__main__":
