@@ -1,7 +1,6 @@
 from datetime import datetime
-from typing import Sequence
 
-from src.data.asset import AssetFeatureCalculatorVector, AssetFeatureCalculatorIterable, AssetPriceStorage
+from src.data.asset import AssetFeatureCalculatorIterable, AssetPriceStorage
 
 
 class MAFeatureCalculator(AssetFeatureCalculatorIterable):
