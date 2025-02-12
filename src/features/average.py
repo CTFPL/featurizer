@@ -1,22 +1,27 @@
 from datetime import datetime
 
+from features.base import LagTicksWindowCalculator
 from src.data.asset import AssetFeatureCalculatorIterable, AssetPriceStorage
 
 
-class MAFeatureCalculator(AssetFeatureCalculatorIterable):
+class MAFeatureCalculator(LagTicksWindowCalculator):
     def __init__(self, verbose: bool = False, override_features: bool = False, periods: int = 1, value_col: str = "close"):
-        super().__init__(verbose, override_features)
-        self.periods = periods
-        self.value_col = value_col
-        self.name = f"MA_{self.periods}"
+        super().__init__(
+            verbose=verbose, 
+            override_features=override_features,
+            window=periods,
+            lag=0,
+            value_col=value_col,
+        )
+        self.name = f"MA_{self.name}"
 
     def calculate_one_unit(self, asset_price_storage: AssetPriceStorage, dt: datetime) -> float | None:
-        df = asset_price_storage.get_slice_by_ticks(dt, n_ticks=self.periods)
-        
-        if df.shape[0] == 0:
+        df = self.get_df(asset_price_storage, dt)
+
+        if df is None:
             return None
-        else:
-            return df[self.value_col].mean()
+        
+        return df[self.value_col].mean()
 
 
 class EMAFeatureCalculator(AssetFeatureCalculatorIterable):
