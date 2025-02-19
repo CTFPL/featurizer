@@ -1,58 +1,55 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from src.data.index import CandlesAssetData
+from src.features.base import BaseFeaturizer
 
 
-from features.base import LagDTWindowCalculator, LagTicksWindowCalculator
-from src.data.asset import AssetPriceStorage
+class LagTicksFeaturizer(BaseFeaturizer):
+    def __init__(self, name: str, feature: str, lag: int, add_to_asset: bool = False):
+        super().__init__(add_to_asset=add_to_asset)
 
+        self.name = name
+        self.feature = feature
+        self.lag = lag
 
-class LagTicksFeatures(LagTicksWindowCalculator):
-    def __init__(
-            self, 
-            verbose: bool = False, 
-            override_features: bool = False, 
-            lag: int = 1, 
-            value_col: str = "close"
-        ):
-        super().__init__(
-            verbose=verbose,
-            override_features=override_features,
-            window=1,
-            lag=lag,
-            value_col=value_col
-        )
-        self.name += "_LAG_FEATURES"
+    def get_features_batch(self, asset: CandlesAssetData):
+        output = []
 
-    def calculate_one_unit(self, asset_price_storage: AssetPriceStorage, dt: datetime) -> float | None:
-        df = self.get_df(asset_price_storage, dt)
+        for dt in asset.sorted_dates:
+            output.append(self.get_features_iter(asset, dt))
 
-        if df is None:
-            return None
+        return (asset.sorted_dates, output)
+
+    def get_features_iter(self, asset: CandlesAssetData, dt: datetime):
+        output = asset.get_lag_ticks(dt=dt, ticks=self.lag)
+        output = output[self.feature] if output is not None else None
+
+        if self.add_to_asset:
+            asset.update(dt, {self.name: output})
         
-        return df[self.value_col][0]
+        return (dt, output)
 
 
-class LagIntervalCalculator(LagDTWindowCalculator):
-    def __init__(
-            self, 
-            verbose: bool = False, 
-            override_features: bool = False, 
-            interval_sec: int = 1, 
-            value_col: str = "close",
-        ):
-        super().__init__(
-            verbose=verbose,
-            override_features=override_features,
-            window_sec=1
-        )
-        self.name = f"LAG_Interval_{self.interval_sec}"
+class LagTimeDeltaFeaturizer(BaseFeaturizer):
+    def __init__(self, name: str, feature: str, lag: timedelta, add_to_asset: bool = False):
+        super().__init__(add_to_asset=add_to_asset)
 
-    def calculate_one_unit(self, asset_price_storage: AssetPriceStorage, dt: datetime) -> float | None:
-        assert "trading_session" in asset_price_storage.df.columns
+        self.name = name
+        self.feature = feature
+        self.lag = lag
+
+    def get_features_batch(self, asset: CandlesAssetData):
+        output = []
+
+        for dt in asset.sorted_dates:
+            output.append(self.get_features_iter(asset, dt))
+
+        return (asset.sorted_dates, output)
+
+    def get_features_iter(self, asset: CandlesAssetData, dt: datetime):
+        output = asset.get_lag_timedelta(dt=dt, td=self.lag)
+
+        if self.add_to_asset:
+            asset.update(dt, {self.name: output})
         
-        df = asset_price_storage.get_slice_by_interval(dt, interval=self.interval_timedelta)
-
-        if len(df) <= 0:
-            # insufficient data
-            return None
-        
-        return df[self.value_col][0]
+        return (dt, output)

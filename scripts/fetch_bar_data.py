@@ -10,7 +10,7 @@ from tinkoff.invest.schemas import InstrumentExchangeType, Currency
 from tinkoff.invest.constants import INVEST_GRPC_API_SANDBOX
 from tqdm import tqdm
 
-from src.data.fetch import fetch_candles_data, fetch_candles_data_last
+from scripts.data.fetch import fetch_candles_data, fetch_candles_data_last
 
 
 def get_available_tickers(token: str) -> pl.DataFrame:
