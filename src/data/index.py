@@ -28,6 +28,9 @@ class CandlesAssetData:
                 self.assert_data(data[dt])
             self.data[dt] = data[dt]
 
+    def __len__(self):
+        return len(self.sorted_dates)
+
     @classmethod
     def assert_data(cls, data: dict):
         assert cls.low_col in data, data
@@ -54,7 +57,7 @@ class CandlesAssetData:
         Включая dt
         """
         dt = dt.replace(tzinfo=timezone.utc)
-        if dt in self.sorted_dates:
+        if dt in self.data:
             return self.data[dt]
         
         index = self._get_closest_right_index(dt)
@@ -117,7 +120,7 @@ class CandlesAssetData:
             returned_data.append(self.data[dt])
 
     def to_polars(self) -> pl.DataFrame:
-        return pl.from_dicts(list(self.data.values())).sort(self.dt_col)
+        return pl.from_dicts(list(self.data.values()), infer_schema_length=None).sort(self.dt_col)
     
     def update(self, dt: datetime, data: dict):
         self.data[dt].update(data)
