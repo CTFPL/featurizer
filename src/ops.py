@@ -1,3 +1,9 @@
+import os
+
+from tinkoff.invest import Client
+from tinkoff.invest.constants import INVEST_GRPC_API_SANDBOX
+
+
 def get_lot_count(instrument_id, client):
     instruments = client.instruments.find_instrument(query=instrument_id).instruments
 
