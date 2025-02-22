@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from datetime import datetime, timedelta
+import random
 
 from tqdm.auto import tqdm
 import pandas as pd
@@ -101,6 +102,29 @@ class LagModelPredictPriceFeaturizer(BaseFeaturizer):
             asset.update(dt, {self.name: output})
 
         return (dt, output)
+    
+
+class DumbRegressionModelFeaturizer(LagModelPredictPriceFeaturizer):
+    class DumbModel:
+        def fit(self, *args, **kwargs):
+            pass
+
+        def predict(self, features: pd.DataFrame, *args, **kwargs):
+            return np.array([random.random() for _ in range(len(features))])
+        
+
+    def _fit_model(self, df: pd.DataFrame, model):
+        model.fit(df[self.model_features], df["target"], sample_weight=df["sample_weight"])
+
+    def _create_model(self):
+        return self.DumbModel()
+
+    def _predict_model(self, df: pd.DataFrame, model) -> np.ndarray:
+        return model.predict(df[self.model_features])
+    
+    def _check_model_is_fitted(self, model):
+        return True
+
 
 
 class LagClassificationModelPredictPriceFeaturizer(LagModelPredictPriceFeaturizer):
@@ -181,3 +205,25 @@ class LagClassificationModelPredictPriceFeaturizer(LagModelPredictPriceFeaturize
             asset.update(dt, {self.name: output})
 
         return (dt, output)
+
+
+class DumbClassificationModelFeaturizer(LagClassificationModelPredictPriceFeaturizer):
+    class DumbModel:
+        def fit(self, *args, **kwargs):
+            pass
+
+        def predict(self, features: pd.DataFrame, *args, **kwargs):
+            return np.array([random.random() for _ in range(len(features))]) < 0.5
+        
+
+    def _fit_model(self, df: pd.DataFrame, model):
+        model.fit(df[self.model_features], df["target"], sample_weight=df["sample_weight"])
+
+    def _create_model(self):
+        return self.DumbModel()
+
+    def _predict_model(self, df: pd.DataFrame, model) -> np.ndarray:
+        return model.predict(df[self.model_features])
+    
+    def _check_model_is_fitted(self, model):
+        return True
