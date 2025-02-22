@@ -15,9 +15,9 @@ class TALibFeaturizer(BaseFeaturizer):
 
     def get_features_batch(self, asset: CandlesAssetData):
         open_ = np.array([asset.data[dt][asset.open_col] for dt in asset.sorted_dates])
-        high_ = np.array([asset.data[dt][asset.open_col] for dt in asset.sorted_dates])
-        low_ = np.array([asset.data[dt][asset.open_col] for dt in asset.sorted_dates])
-        close_ = np.array([asset.data[dt][asset.open_col] for dt in asset.sorted_dates])
+        high_ = np.array([asset.data[dt][asset.high_col] for dt in asset.sorted_dates])
+        low_ = np.array([asset.data[dt][asset.low_col] for dt in asset.sorted_dates])
+        close_ = np.array([asset.data[dt][asset.close_col] for dt in asset.sorted_dates])
         volume_ = np.array([asset.data[dt][asset.volume_col] for dt in asset.sorted_dates])
 
         outputs = self.func(dict(open=open_, high=high_, low=low_, close=close_, volume=volume_))
