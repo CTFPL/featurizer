@@ -7,24 +7,37 @@ from src.features.base import BaseFeaturizer
 
 
 class TALibFeaturizer(BaseFeaturizer):
-    def __init__(self, names: list[str] | str, func, add_to_asset: bool = False):
+    def __init__(
+        self, 
+        names: list[str] | str, 
+        func, 
+        add_to_asset: bool = False
+    ):
         super().__init__(add_to_asset=add_to_asset)
 
         self.names = [names, ] if isinstance(names, str) else names
         self.func = func
+
+    def _get_func_input(self, asset: CandlesAssetData, dt: datetime | None = None):
+        def check_dt(dt_):
+            return (dt is None) or (dt_ <= dt)
+        
+        open_ = np.array([asset.data[dt_][asset.open_col] for dt_ in asset.sorted_dates if check_dt(dt_)])
+        high_ = np.array([asset.data[dt_][asset.high_col] for dt_ in asset.sorted_dates if check_dt(dt_)])
+        low_ = np.array([asset.data[dt_][asset.low_col] for dt_ in asset.sorted_dates if check_dt(dt_)])
+        close_ = np.array([asset.data[dt_][asset.close_col] for dt_ in asset.sorted_dates if check_dt(dt_)])
+        volume_ = np.array([asset.data[dt_][asset.volume_col] for dt_ in asset.sorted_dates if check_dt(dt_)])
+
+        return dict(open=open_, high=high_, low=low_, close=close_, volume=volume_)
 
     def get_features_batch(self, asset: CandlesAssetData):
         """
         По дефолту talib использует текущее значение для расчета индикаторов, но кажется,
         что нужно исключать текущую цену из рассмотрения
         """
-        open_ = np.array([asset.data[dt][asset.open_col] for dt in asset.sorted_dates])
-        high_ = np.array([asset.data[dt][asset.high_col] for dt in asset.sorted_dates])
-        low_ = np.array([asset.data[dt][asset.low_col] for dt in asset.sorted_dates])
-        close_ = np.array([asset.data[dt][asset.close_col] for dt in asset.sorted_dates])
-        volume_ = np.array([asset.data[dt][asset.volume_col] for dt in asset.sorted_dates])
+        func_input = self._get_func_input(asset)
 
-        outputs = self.func(dict(open=open_, high=high_, low=low_, close=close_, volume=volume_))
+        outputs = self.func(func_input)
         if isinstance(outputs, np.ndarray):
             outputs = [outputs, ]
 
@@ -38,4 +51,15 @@ class TALibFeaturizer(BaseFeaturizer):
         return (asset.sorted_dates, outputs)
 
     def get_features_iter(self, asset: CandlesAssetData, dt: datetime):
-        raise NotImplementedError()
+        func_input = self._get_func_input(asset, dt)
+
+        outputs = self.func(func_input)
+        if isinstance(outputs, np.ndarray):
+            outputs = [outputs, ]
+
+        for name, outputs_ in zip(self.names, outputs):
+            # -2 так как в talib есть лаг
+            if len(outputs_) < 2:
+                asset.update(dt, {name: None})    
+            else:
+                asset.update(dt, {name: outputs_[-2]})
