@@ -111,7 +111,7 @@ class DumbRegressionModelFeaturizer(LagModelPredictPriceFeaturizer):
 
         def predict(self, features: pd.DataFrame, *args, **kwargs):
             return np.array([random.random() for _ in range(len(features))])
-        
+
 
     def _fit_model(self, df: pd.DataFrame, model):
         model.fit(df[self.model_features], df["target"], sample_weight=df["sample_weight"])
@@ -124,7 +124,6 @@ class DumbRegressionModelFeaturizer(LagModelPredictPriceFeaturizer):
     
     def _check_model_is_fitted(self, model):
         return True
-
 
 
 class LagClassificationModelPredictPriceFeaturizer(LagModelPredictPriceFeaturizer):
