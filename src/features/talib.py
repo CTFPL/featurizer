@@ -63,3 +63,9 @@ class TALibFeaturizer(BaseFeaturizer):
                 asset.update(dt, {name: None})    
             else:
                 asset.update(dt, {name: outputs_[-2]})
+
+    def get_name(self):
+        if len(self.names) == 1:
+            return self.names[0]
+        else:
+            raise TypeError(f"Featurizers returns multiple names")

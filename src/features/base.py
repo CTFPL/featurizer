@@ -20,3 +20,6 @@ class BaseFeaturizer(ABC):
     def set_name(self, name: str):
         self.name = name
         return self
+
+    def get_name(self):
+        return self.name

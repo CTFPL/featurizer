@@ -1,9 +1,7 @@
-from datetime import datetime
 import pandas as pd
 import numpy as np
 import catboost as cb
 
-from src.data.index import CandlesAssetData
 from src.features.models.base import LagClassificationModelPredictPriceFeaturizer, LagModelPredictPriceFeaturizer
 
 
@@ -33,7 +31,7 @@ class CatboostClassifierFeaturizer(LagClassificationModelPredictPriceFeaturizer)
         return cb.CatBoostClassifier(**self.model_params)
 
     def _predict_model(self, df: pd.DataFrame, model) -> np.ndarray:
-        return model.predict(df[self.model_features])
+        return model.predict_proba(df[self.model_features])[:, 1] >= self.threshold
     
     def _check_model_is_fitted(self, model):
         return model.is_fitted()

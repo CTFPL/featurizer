@@ -21,6 +21,7 @@ class LagModelPredictPriceFeaturizer(BaseFeaturizer):
         lag_target: int = 10,
         add_to_asset: bool = False,
         cached_model_seconds: int = 0,
+        use_time_weights: bool = False
     ):
         super().__init__(add_to_asset=add_to_asset)
 
@@ -35,6 +36,8 @@ class LagModelPredictPriceFeaturizer(BaseFeaturizer):
         self.cached_model_seconds = cached_model_seconds
         self.cached_model = None
         self.cached_model_dt = None
+
+        self.use_time_weights = use_time_weights
 
     @abstractmethod
     def _create_model(self):
@@ -80,6 +83,24 @@ class LagModelPredictPriceFeaturizer(BaseFeaturizer):
 
         return (asset.sorted_dates, output)
     
+    def _add_sample_weights(self, df: pd.DataFrame) -> pd.DataFrame:
+        df["sample_weight"] = 1
+        if self.use_time_weights:
+            df["sample_weight"] = np.arange(df.shape[0])[::-1] + 1
+            df["sample_weight"] = 1 / np.log(df["sample_weight"] + 1)
+
+        return df
+    
+    def _preprocess_datasets(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+        df = self._add_sample_weights(df)
+        
+        df["target"] = df[self.target_col].shift(-self.lag_target)
+
+        df_train = df.iloc[:-self.lag_target]
+        df_test = df.iloc[-self.lag_target:]
+
+        return df_train, df_test
+    
     def get_features_iter(self, asset: CandlesAssetData, dt: datetime):
         data = asset.get_last_n_ticks(dt, n_ticks=self.n_lags)
 
@@ -89,10 +110,7 @@ class LagModelPredictPriceFeaturizer(BaseFeaturizer):
             output = None
         else:
             df = pd.DataFrame.from_records(data).sort_values(asset.dt_col)
-            df["target"] = df[self.target_col].shift(-self.lag_target)
-
-            df_train = df.iloc[:-self.lag_target]
-            df_test = df.iloc[-self.lag_target:]
+            df_train, df_test = self._preprocess_datasets(df)
 
             model = self.create_model(dt)
             self.fit_model(df_train, model, dt)
@@ -140,6 +158,8 @@ class LagClassificationModelPredictPriceFeaturizer(LagModelPredictPriceFeaturize
         min_up_perc: float = 0.0008,
         use_time_weights: bool = False,
         cached_model_seconds: int = 0,
+        threshold: float = 0.5,
+        quantile: float = 1.0,
     ):
         super().__init__(
             name=name, 
@@ -155,6 +175,8 @@ class LagClassificationModelPredictPriceFeaturizer(LagModelPredictPriceFeaturize
         self.predict_up = predict_up
         self.min_up_perc = min_up_perc
         self.use_time_weights = use_time_weights
+        self.threshold = threshold
+        self.quantile = quantile
 
     def _add_sample_weights(self, df: pd.DataFrame) -> pd.DataFrame:
         df["sample_weight"] = 1
@@ -166,15 +188,16 @@ class LagClassificationModelPredictPriceFeaturizer(LagModelPredictPriceFeaturize
 
     def _preprocess_datasets(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         df = self._add_sample_weights(df)
-        df["max_target_next_periods"] = df[self.target_col][::-1].rolling(self.lag_target, min_periods=1).max()[::-1].shift(-1)
-            
+        
         if self.predict_up:
             # проверка, что цена в следующий период будет выше на min_up_perc
-            max_price_next_shift = df[self.target_col][::-1].rolling(self.lag_target, min_periods=1).max()[::-1].shift(-1)
+            # max_price_next_shift = df[self.target_col][::-1].rolling(self.lag_target, min_periods=1).max()[::-1].shift(-1)
+            max_price_next_shift = df[self.target_col][::-1].rolling(self.lag_target, min_periods=1).quantile(self.quantile)[::-1].shift(-1)
             df["target"] = df[self.target_col] * (1 + self.min_up_perc) < max_price_next_shift
         else:
             # цена будет ниже на min_up_perc, чем сейчас
-            min_price_next_shift = df[self.target_col][::-1].rolling(self.lag_target, min_periods=1).min()[::-1].shift(-1)
+            # min_price_next_shift = df[self.target_col][::-1].rolling(self.lag_target, min_periods=1).min()[::-1].shift(-1)
+            min_price_next_shift = df[self.target_col][::-1].rolling(self.lag_target, min_periods=1).quantile(1 - self.quantile)[::-1].shift(-1)
             df["target"] = df[self.target_col] * (1 - self.min_up_perc) > min_price_next_shift
 
         df_train = df.iloc[:-self.lag_target]

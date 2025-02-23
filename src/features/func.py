@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Callable
+from typing import Any, Callable
 
 from tqdm.auto import tqdm
 
@@ -8,7 +8,12 @@ from src.data.index import CandlesAssetData
 
 
 class FuncFeaturizer(BaseFeaturizer):
-    def __init__(self, name: str, func: Callable[[CandlesAssetData, datetime | None], float | None], add_to_asset: bool = False):
+    def __init__(
+        self, 
+        name: str, 
+        func: Callable[[CandlesAssetData, datetime | None], Any],
+        add_to_asset: bool = False
+    ):
         super().__init__(add_to_asset=add_to_asset)
 
         self.name = name
