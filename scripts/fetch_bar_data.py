@@ -10,7 +10,7 @@ from tinkoff.invest.schemas import InstrumentExchangeType, Currency
 from tinkoff.invest.constants import INVEST_GRPC_API_SANDBOX
 from tqdm import tqdm
 
-from scripts.data.fetch import fetch_candles_data, fetch_candles_data_last
+from scripts.fetch import fetch_candles_data, fetch_candles_data_last
 
 
 def get_available_tickers(token: str) -> pl.DataFrame:
@@ -51,7 +51,7 @@ def cli(dotenv_path):
 def fetch_all(n_days, interval, save_dir, error_ticker_dir):
     """
     PYTHONPATH=. nohup python scripts/fetch_all_tickers.py -d .env fetch-all >logs/fetch_all_hour.log 2>&1 &
-    PYTHONPATH=. nohup python scripts/fetch_all_tickers.py -d .env fetch-all -i CANDLE_INTERVAL_1_MIN -d 90 -s data/candles_1_min/ >logs/fetch_all_minute.log 2>&1 &
+    PYTHONPATH=. nohup python scripts/fetch_bar_data.py -d .env fetch-all -i CANDLE_INTERVAL_1_MIN -d 90 -s data/candles_1_min/ >logs/fetch_all_minute.log 2>&1 &
     echo $! > logs/fetch_all_hour.pid
     """
     token = os.environ["SANDBOX_TOKEN"]

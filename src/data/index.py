@@ -4,6 +4,8 @@ from datetime import datetime, timezone, timedelta
 import polars as pl
 from tqdm.auto import tqdm
 
+from src.db.clickhouse import get_connector
+
 
 class CandlesAssetData:
     dt_col = "ts"
@@ -48,15 +50,57 @@ class CandlesAssetData:
 
         return cls(data=data, check_columns=check_columns)
     
+    @classmethod
+    def from_clickhouse(
+        cls, 
+        uid: str, 
+        date_from: str, 
+        date_to: str, 
+        filter_weekend: bool = True,
+        check_columns: bool = True,
+    ):
+        connector = get_connector()
+        filter_weekend_str = "toDayOfWeek(toDateTime(`time`), 0) <= 5" if filter_weekend else "1=1"
+        df_pd = connector.query_df(
+f"""select
+    uid
+    , high `{cls.high_col}`
+    , low `{cls.low_col}`
+    , `close` `{cls.close_col}`
+    , `open` `{cls.open_col}`
+    , volume_from_trades `{cls.volume_col}`
+    , toDateTime(`time`) `{cls.dt_col}`
+FROM `default`.aggregations
+where 1=1
+    and uid = '{uid}'
+    and toDateTime(`time`) >= '{date_from}'
+    and toDateTime(`time`) <= '{date_to}'
+    and {filter_weekend_str}
+order by ts asc
+""")
+        data = {
+            d[cls.dt_col].to_pydatetime(): {
+                k: v if k != cls.dt_col else v.to_pydatetime()
+                for k, v in d.items()
+            }
+            for d in df_pd.to_dict(orient="records")
+        }
+
+        return cls(data=data, check_columns=check_columns)
+    
+    def __preprocess_dt(self, dt: datetime):
+        return dt
+        return dt.replace(tzinfo=timezone.utc)
+    
     def _get_closest_right_index(self, dt: datetime):
-        dt = dt.replace(tzinfo=timezone.utc)
         return bisect.bisect_right(self.sorted_dates, dt) - 1
     
     def get(self, dt: datetime) -> dict | None:
         """
         Включая dt
         """
-        dt = dt.replace(tzinfo=timezone.utc)
+        # dt = dt.replace(tzinfo=timezone.utc)
+        dt = self.__preprocess_dt(dt)
         if dt in self.data:
             return self.data[dt]
         
@@ -69,7 +113,8 @@ class CandlesAssetData:
         return self.data[dt_index]
     
     def get_lag_ticks(self, dt: datetime, ticks: int = 1) -> dict | None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        # dt = dt.replace(tzinfo=timezone.utc)
+        dt = self.__preprocess_dt(dt)
 
         index_to = self._get_closest_right_index(dt)
         index_lag = index_to - ticks
@@ -82,7 +127,8 @@ class CandlesAssetData:
         return self.data[index_dt]
     
     def get_lag_timedelta(self, dt: datetime, td: timedelta) -> dict | None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        # dt = dt.replace(tzinfo=timezone.utc)
+        dt = self.__preprocess_dt(dt)
         dt_lag = dt - td
 
         index = bisect.bisect_left(self.sorted_dates, dt_lag)
@@ -95,8 +141,10 @@ class CandlesAssetData:
         Включая dt_to
         Включая dt_from
         """
-        dt_from = dt_from.replace(tzinfo=timezone.utc)
-        dt_to = dt_to.replace(tzinfo=timezone.utc)
+        # dt_from = dt_from.replace(tzinfo=timezone.utc)
+        # dt_to = dt_to.replace(tzinfo=timezone.utc)
+        dt_from = self.__preprocess_dt(dt_from)
+        dt_to = self.__preprocess_dt(dt_to)
 
         start_idx = bisect.bisect_left(self.sorted_dates, dt_from)
         end_idx = bisect.bisect_right(self.sorted_dates, dt_to)
@@ -108,6 +156,8 @@ class CandlesAssetData:
         """
         Включая dt_to
         """
+        dt_to = self.__preprocess_dt(dt_to)
+
         index_to = self._get_closest_right_index(dt_to) + 1
         index_from = max(0, index_to - n_ticks)
 

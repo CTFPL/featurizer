@@ -1,7 +1,7 @@
 import os
 
 from tinkoff.invest import Client
-from tinkoff.invest.constants import INVEST_GRPC_API_SANDBOX
+from tinkoff.invest.constants import INVEST_GRPC_API_SANDBOX, INVEST_GRPC_API
 
 
 def get_lot_count(instrument_id, client):
@@ -18,7 +18,7 @@ def parse_quotation(q):
 
 def find_instrument_id(ticker):
     matching_instruments = []
-    with Client(os.environ["SANDBOX_TOKEN"], target=INVEST_GRPC_API_SANDBOX) as client:
+    with Client(os.environ["TOKEN"], target=INVEST_GRPC_API) as client:
         for instrument in client.instruments.find_instrument(query=ticker).instruments:
             if not instrument.api_trade_available_flag:
                 continue
