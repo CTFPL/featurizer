@@ -32,6 +32,6 @@ def find_instrument_id(ticker):
     if len(matching_instruments) > 1:
         print(matching_instruments)
     elif len(matching_instruments) == 1:
-        return matching_instruments[0].uid
+        return matching_instruments #[0].uid
 
     return False

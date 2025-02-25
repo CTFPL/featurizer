@@ -1,10 +1,11 @@
 import bisect
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 import polars as pl
 from tqdm.auto import tqdm
 
-from src.db.clickhouse import get_connector
+from src.db.clickhouse import get_connector, read_data
 
 
 class CandlesAssetData:
@@ -17,7 +18,9 @@ class CandlesAssetData:
 
     def __init__(
         self,
+        name: str,
         data: dict[datetime, dict] | None = None,
+        save_dir: Path | None = None,  
         check_columns: bool = False
     ):
         if data is None:
@@ -30,8 +33,33 @@ class CandlesAssetData:
                 self.assert_data(data[dt])
             self.data[dt] = data[dt]
 
+        self.name = name
+        self.save_dir = save_dir
+
     def __len__(self):
         return len(self.sorted_dates)
+
+    def trim_dt(self, date_from: datetime | None = None, date_to: datetime | None = None):
+        if date_from is not None:
+            self.sorted_dates = [d for d in self.sorted_dates if d >= date_from]
+
+        if date_to is not None:
+            self.sorted_dates = [d for d in self.sorted_dates if d <= date_to]
+
+        self.data = {dt: self.data[dt] for dt in self.sorted_dates}
+
+        return self
+    
+    def trim_ticks(self, head: int | None = None, tail: int | None = None):
+        if head is not None:
+            self.sorted_dates = self.sorted_dates[:head]
+
+        if tail is not None:
+            self.sorted_dates = self.sorted_dates[-tail:]
+
+        self.data = {dt: self.data[dt] for dt in self.sorted_dates}
+
+        return self
 
     @classmethod
     def assert_data(cls, data: dict):
@@ -42,13 +70,13 @@ class CandlesAssetData:
         assert cls.volume_col in data, data
 
     @classmethod
-    def from_polars(cls, df: pl.DataFrame, check_columns: bool = True):
+    def from_polars(cls, df: pl.DataFrame, name: str, save_dir: Path | None = None, check_columns: bool = True):
         data = {
             d[cls.dt_col]: d 
             for d in df.to_dicts()
         }
 
-        return cls(data=data, check_columns=check_columns)
+        return cls(name=name, data=data, save_dir=save_dir, check_columns=check_columns)
     
     @classmethod
     def from_clickhouse(
@@ -56,28 +84,31 @@ class CandlesAssetData:
         uid: str, 
         date_from: str, 
         date_to: str, 
+        name: str,
         filter_weekend: bool = True,
+        save_dir: Path | None = None, 
         check_columns: bool = True,
     ):
         connector = get_connector()
         filter_weekend_str = "toDayOfWeek(toDateTime(`time`), 0) <= 5" if filter_weekend else "1=1"
-        df_pd = connector.query_df(
-f"""select
-    uid
-    , high `{cls.high_col}`
-    , low `{cls.low_col}`
-    , `close` `{cls.close_col}`
-    , `open` `{cls.open_col}`
-    , volume_from_trades `{cls.volume_col}`
-    , toDateTime(`time`) `{cls.dt_col}`
-FROM `default`.aggregations
-where 1=1
-    and uid = '{uid}'
-    and toDateTime(`time`) >= '{date_from}'
-    and toDateTime(`time`) <= '{date_to}'
-    and {filter_weekend_str}
-order by ts asc
-""")
+        query = f"""
+        select
+            uid
+            , high `{cls.high_col}`
+            , low `{cls.low_col}`
+            , `close` `{cls.close_col}`
+            , `open` `{cls.open_col}`
+            , volume_from_trades `{cls.volume_col}`
+            , toDateTime(`time`) `{cls.dt_col}`
+        FROM `default`.aggregations_fast
+        where 1=1
+            and uid = '{uid}'
+            and toDateTime(`time`) >= '{date_from}'
+            and toDateTime(`time`) <= '{date_to}'
+            and {filter_weekend_str}
+        order by ts asc
+        """
+        df_pd = connector.query_df(query)
         data = {
             d[cls.dt_col].to_pydatetime(): {
                 k: v if k != cls.dt_col else v.to_pydatetime()
@@ -86,7 +117,20 @@ order by ts asc
             for d in df_pd.to_dict(orient="records")
         }
 
-        return cls(data=data, check_columns=check_columns)
+        return cls(name=name, data=data, save_dir=save_dir, check_columns=check_columns)
+    
+    def merge(self, other):
+        other_sorted_dates = other.sorted_dates
+        max_sorted_date = self.sorted_dates[-1]
+
+        for dt in other_sorted_dates:
+            if dt <= max_sorted_date:
+                continue
+
+            self.sorted_dates.append(dt)
+            self.data[dt] = other.data[dt]
+
+        return self
     
     def __preprocess_dt(self, dt: datetime):
         return dt
@@ -163,12 +207,6 @@ order by ts asc
 
         return [self.data[dt] for dt in self.sorted_dates[index_from:index_to]]
     
-    def cumulative_iterator(self):
-        returned_data = []
-        for dt in self.sorted_dates:
-            yield returned_data
-            returned_data.append(self.data[dt])
-
     def to_polars(self) -> pl.DataFrame:
         return pl.from_dicts(list(self.data.values()), infer_schema_length=None).sort(self.dt_col)
     

@@ -13,7 +13,7 @@ from src.data.index import CandlesAssetData
 def get_featurizers():
     all_featurizers = []
 
-    sma_high_period = 60
+    sma_high_period = 120
     sma_high_featurizer = TALibFeaturizer(
         f"sma_{sma_high_period}", 
         func=lambda kwargs: talib.SMA(real=kwargs["close"], timeperiod=sma_high_period), 
@@ -30,7 +30,7 @@ def get_featurizers():
         sma_high_lag_featurizer,
     ])
 
-    sma_low_period = 15
+    sma_low_period = 60
     sma_low_featurizer = TALibFeaturizer(
         f"sma_{sma_low_period}", 
         func=lambda kwargs: talib.SMA(real=kwargs["close"], timeperiod=sma_low_period), 
@@ -110,6 +110,9 @@ def get_featurizers():
         if curr is None:
             return None
         
+        if max_ - min_ == 0:
+            return None
+        
         return (curr - min_) / (max_ - min_)
     
     def norm_(asset: CandlesAssetData, dt: datetime, lag: int = 60, col: str = "close"):
@@ -120,6 +123,9 @@ def get_featurizers():
             return None
         
         if (data_curr is None) or (col not in data_curr) or (data_curr[col] is None):
+            return None
+        
+        if (data_curr[col] + data_curr[col]) == 0:
             return None
         
         return 2 * (data_curr[col] - data_lag[col]) / (data_curr[col] + data_curr[col])
@@ -208,7 +214,7 @@ def get_featurizers():
             "verbose": 0
         }, 
         n_lags=5000, 
-        lag_target=4 * 60, 
+        lag_target=8 * 60, 
         add_to_asset=False, 
         predict_up=True, 
         use_time_weights=True,
@@ -227,7 +233,7 @@ def get_featurizers():
             "verbose": 0
         }, 
         n_lags=5000, 
-        lag_target=4 * 60, 
+        lag_target=8 * 60, 
         add_to_asset=False, 
         predict_up=False, 
         use_time_weights=True,
