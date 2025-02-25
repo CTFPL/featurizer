@@ -55,10 +55,12 @@ def with_ssh_tunnel(f):
             with open_tunnel(
                 os.environ["SSH_BIND_IP"],
                 ssh_username=os.environ["SSH_USERNAME"],
-                # ssh_password=os.environ["SSH_PKEY_PASSWORD"],
+                ssh_password=os.environ["SSH_PKEY_PASSWORD"],
+                ssh_private_key_password=os.environ["SSH_PKEY_PASSWORD"],
                 ssh_pkey=os.environ["SSH_PKEY"],
                 remote_bind_address=(os.environ["SSH_REMOTE_BIND_ADDRESS_IP"], int(os.environ["SSH_REMOTE_BIND_ADDRESS_HOST"])),
                 local_bind_address=(os.environ["SSH_LOCAL_BIND_ADDRESS_IP"], int(os.environ["SSH_LOCAL_BIND_ADDRESS_HOST"])),
+                host_pkey_directories=os.environ["SSH_host_pkey_directories"],
             ) as server:
                 return f(*args, **kwargs)
         except HandlerSSHTunnelForwarderError as e:
